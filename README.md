@@ -1,11 +1,39 @@
 # Robot Simulation Studio
 
-An FTC/VEX engineering studio derived from Austin's MIT-licensed `ftcsim`.
-It preserves the original MuJoCo drivetrain work while adding a redesigned
-interface, VEX hardware mode, autonomous path editor, telemetry graphs and
-controller diagnostics.
+## What this project does
+
+Building and repeatedly changing a competition robot is expensive. Robot
+Simulation Studio lets a student drive a virtual FTC or VEX robot, design an
+autonomous route, test a controller, and inspect motion data before changing
+physical hardware. The robot obeys a physics model rather than moving as a
+pre-recorded animation.
 
 ![Robot Simulation Studio VEX interface](robot-simulation-studio.png)
+
+## Engineering design
+
+```text
+Keyboard / gamepad ──> FTC or VEX motor model ──> MuJoCo physics
+                                                     │
+Path editor ─────────> autonomous follower ──────────┤
+                                                     ↓
+                             virtual robot, arm, claw, IMU and encoders
+                                                     ↓
+                                  live graphs + CSV + controller diagnostics
+```
+
+Key choices:
+
+- **MuJoCo physics instead of scripted motion** so mass, contact and wheel forces matter.
+- **Mecanum-wheel rollers** to reproduce forward, sideways and turning behavior.
+- **Separate FTC/VEX motor profiles** rather than pretending both systems behave identically.
+- **Editable autonomous paths** that use the same simulated drivetrain as manual control.
+- **Measured limitations:** gamepad and CAD import features are labeled untested where appropriate.
+
+This is an FTC/VEX engineering studio derived from Austin's MIT-licensed
+`ftcsim`. It preserves the original MuJoCo drivetrain work while adding a
+redesigned interface, VEX hardware mode, autonomous path editor, telemetry
+graphs and controller diagnostics.
 
 A 3D physics simulator for FIRST Tech Challenge robots, built on
 [MuJoCo](https://mujoco.org/). Real mecanum physics, a motor model that
@@ -318,3 +346,56 @@ Two filters decide whether a pair of geoms can touch, and both bit me:
 
 1. **contype / conaffinity bitmasks.** Geoms collide when
    `(contype1 & conaffinity2) || (contype2 & conaffinity1)`. Putting every
+   robot part in one bucket to stop the wheel rollers grinding on the frame
+   also silently disabled arm-vs-chassis. `structure.py` now uses separate
+   groups (WORLD / CHASSIS / ARM / WHEEL / GAME) so exactly one pair is
+   disabled.
+2. **MuJoCo automatically excludes a body from its own parent.** The arm is a
+   child of the chassis, so *no bitmask can ever make them collide*. That needs
+   explicit `<pair>` elements, which bypass every filter. This is why the arm
+   swung through the deck no matter what the masks said.
+
+`collision_test.py` asserts the whole matrix plus the behaviour, because a
+collision that silently does not happen produces no error at all.
+
+## How it fits together
+
+```
+robot.py       generates the MJCF model (field, chassis, arm) from Python
+wheels.py      mecanum presets + the roller/wheel MJCF generator
+structure.py   material densities + U-channel/plate/motor part builders
+mass_report.py mass budget, arm CG, holding torque, payload capacity
+collision_test.py  asserts every collision pair and that the arm stops on the deck
+motors.py      torque-speed motor model + an FTC-shaped robot API
+teleop.py      gamepad / keyboard driving
+wheel_swap.py  detect and replace CAD wheels in an imported model
+```
+
+The motor model is the part that matters most:
+
+```python
+T = T_stall * (power - omega / omega_free)
+```
+
+A real DC motor can't produce stall torque at full speed — back-EMF eats it.
+MuJoCo's `motor` actuator has no such limit: ask for 3 N·m and it delivers 3 N·m
+at 8000 RPM. Without this the wheels spun to 798 rad/s with zero traction and
+every mechanism "worked".
+
+## Known issues
+
+- **Strafe yaw is sensitive to centre-of-gravity height.** Raising the arm
+  pivot 130 mm (needed so the arm can reach the floor) took strafe drift from
+  under a degree to as much as 20° over two seconds, and it varies with tiny
+  perturbations. That is real — tall mecanum robots do this. `drive_held()`
+  applies gyro heading-hold and brings it back to ~0.2°; leave it on.
+- **Gamepad path is untested.** Written, never run against a real controller.
+- **Mecanum slip is directionally right, quantitatively wrong.** Fine for
+  teleop feel; don't trust it for precise autonomous.
+- **No belt/chain compliance or backlash.** Sim joints are rigid; your real arm
+  has slop.
+- **Battery sag is a crude global scale factor**, not a real model.
+
+## Licence
+
+MIT
