@@ -1,0 +1,10 @@
+{
+  "format": "ftcsim-path-v1",
+  "name": "VEX square demonstration",
+  "waypoints": [
+    {"x": 0.75, "y": 0.0, "heading": 0.0, "speed": 0.55, "tolerance": 0.08},
+    {"x": 0.75, "y": 0.75, "heading": 1.5708, "speed": 0.50, "tolerance": 0.08},
+    {"x": 0.0, "y": 0.75, "heading": 3.14159, "speed": 0.50, "tolerance": 0.08},
+    {"x": 0.0, "y": 0.0, "heading": 0.0, "speed": 0.45, "tolerance": 0.08}
+  ]
+}
